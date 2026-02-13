@@ -2,7 +2,9 @@
 
 A system for extracting, verifying, and correcting claims from news using a claim–source graph, causal checks, and optional RL tuning.
 
-*Ongoing: RL is not yet reliably "learning" (accuracy/reward gains vary); we are iterating on env design and inference to improve consistency.*
+**Skills demonstrated:** Lightweight state management (simple self-correction loops vs. Redis-heavy novelty), use of existing fact-checking datasets (LIAR, FakeNewsNet, Politifact) and multi-agent prototypes, minimal K8s footprint (3–4 pods, Minikube-ready), and rapid prototyping (end-to-end flow in a few hundred lines of Python, then K8s manifests).
+
+*Ongoing: RL is not yet reliably "learning" (accuracy/reward gains vary); we are iterating on "a good reward" to improve consistency.*
 
 ---
 
