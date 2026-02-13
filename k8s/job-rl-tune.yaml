@@ -1,0 +1,26 @@
+# Batch RL tuning: run short PPO training on train_claims.json, then verify one claim and save report.
+# Similar to job.yaml but with --rl-tune (Phase 3).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verifier-job-rl-tune
+spec:
+  template:
+    spec:
+      containers:
+        - name: verifier
+          image: fake-news-verifier:phase2
+          imagePullPolicy: Never
+          command: ["python", "src/main.py"]
+          args:
+            - "--rl-tune"
+            - "--train-data"
+            - "/app/data/train_claims.json"
+            - "--rl-iterations"
+            - "5"
+            - "--input"
+            - "Breaking: 7.2 magnitude earthquake hits Nashville today!"
+            - "--output"
+            - "/app/report.json"
+      restartPolicy: Never
+  backoffLimit: 2

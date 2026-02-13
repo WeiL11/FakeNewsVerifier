@@ -51,6 +51,14 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/job.yaml
 ```
 
+**Option C — Job with RL tune** (batch tuning on train data, then verify and save report):
+
+```bash
+kubectl apply -f k8s/job-rl-tune.yaml
+```
+
+Logs: `kubectl logs job/verifier-job-rl-tune`. Cleanup: `kubectl delete job verifier-job-rl-tune`.
+
 Optional service (for when you add an HTTP API later):
 
 ```bash
