@@ -6,7 +6,13 @@ Phase 3: RL tuner for self-improvement.
 - Evaluates RL improvement: accuracy, Brier/ECE, intervention efficiency, reward trend.
 """
 import copy
+import os
 from pathlib import Path
+
+# Ensure Ray workers can import src (notebook/K8s may run from different cwd)
+_RL_ROOT = Path(__file__).resolve().parent.parent
+if str(_RL_ROOT) not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+    os.environ["PYTHONPATH"] = str(_RL_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
 
 from src.agents.corrector import correct_results
 from src.rl_env import VerifierTunerEnv, THRESHOLDS, BIAS_ADJUSTS, re_env
@@ -225,10 +231,13 @@ def tune_correction(
 
     for i in range(num_iterations):
         result = algo.train()
-        # Mean reward (episode_reward_mean)
+        # Mean reward (RLlib API varies: sampler_results, env_runners/episode_return_mean)
         rew = (result.get("sampler_results") or {}).get("episode_reward_mean")
         if rew is None:
             rew = result.get("episode_reward_mean")
+        if rew is None:
+            env_runners = result.get("env_runners") or result.get("sampler_results") or {}
+            rew = env_runners.get("episode_return_mean") or env_runners.get("episode_reward_mean")
         if rew is not None:
             reward_history.append(float(rew))
         # Policy loss if available (RLlib PPO stores in learner_stats)
@@ -254,21 +263,25 @@ def tune_correction(
             print(f"  Checkpoint save skipped: {e}")
 
     # Infer best_threshold and best_bias_adjust: run policy over full episode(s), take mode
-    env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
     threshold_actions = []
     bias_actions = []
-    for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
-        obs, _ = env.reset(seed=seed)
-        done = False
-        while not done:
-            action = algo.compute_single_action(obs, explore=False)
-            action = int(action)
-            if use_bias_actions:
-                threshold_actions.append(action // len(BIAS_ADJUSTS))
-                bias_actions.append(action % len(BIAS_ADJUSTS))
-            else:
-                threshold_actions.append(action)
-            obs, _, done, _, _ = env.step(action)
+    try:
+        env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
+        for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
+            obs, _ = env.reset(seed=seed)
+            done = False
+            while not done:
+                action = algo.compute_single_action(obs, explore=False)
+                action = int(action)
+                if use_bias_actions:
+                    threshold_actions.append(action // len(BIAS_ADJUSTS))
+                    bias_actions.append(action % len(BIAS_ADJUSTS))
+                else:
+                    threshold_actions.append(action)
+                obs, _, done, _, _ = env.step(action)
+    except Exception as e:
+        print(f"  Policy inference skipped ({e}); using default threshold.")
+        threshold_actions = [2]  # THRESHOLDS[2] = 0.55
 
     try:
         algo.stop()

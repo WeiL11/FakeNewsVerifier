@@ -121,13 +121,18 @@ if __name__ == "__main__":
         default=None,
         help="Path to test/holdout claims JSON (default: 20%% of train data)",
     )
+    parser.add_argument(
+        "--complex-mode",
+        action="store_true",
+        help="Run complex multi-agent pipeline (Understand → Judge → Search Decider → Comparator → Reporter)",
+    )
 
     args, unknown = parser.parse_known_args()
     if unknown:
         pass
 
     correction_params = None
-    if args.rl_tune:
+    if args.rl_tune and not args.complex_mode:
         train_path = args.train_data or str(ROOT / "data" / "train_claims.json")
         if not Path(train_path).exists():
             print(f"Train data not found: {train_path}. Skipping RL tune.")
@@ -163,11 +168,16 @@ if __name__ == "__main__":
                 snippet = r["claim"][:50] + "..." if len(r["claim"]) > 50 else r["claim"]
                 print(f"  Claim {i+1}: {before_confs[i]:.2f} → {after_confs[i]:.2f}  ({snippet})")
 
-    report = run_verification(args.input, correction_params=correction_params)
-
-    print("\nFinal Report Summary:")
-    print(json.dumps(report, indent=2))
+    if args.complex_mode:
+        from src.complex_pipeline import run_complex_pipeline
+        report = run_complex_pipeline(args.input, verbose=True)
+        print("\nFinal Report (complex mode):")
+        print(json.dumps(report, indent=2, default=str))
+    else:
+        report = run_verification(args.input, correction_params=correction_params)
+        print("\nFinal Report Summary:")
+        print(json.dumps(report, indent=2))
 
     if args.output:
-        Path(args.output).write_text(json.dumps(report, indent=2))
+        Path(args.output).write_text(json.dumps(report, indent=2, default=str))
         print(f"\nReport saved to: {args.output}")
