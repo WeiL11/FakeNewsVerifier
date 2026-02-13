@@ -104,6 +104,12 @@ if __name__ == "__main__":
         default=5,
         help="PPO training iterations for RL tuner (default: 5)",
     )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Save RL checkpoint to this dir when using --rl-tune (e.g. checkpoints/ppo)",
+    )
 
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -119,7 +125,11 @@ if __name__ == "__main__":
             dataset = _build_rl_dataset(train_path)
             print(f"  Dataset size: {len(dataset)}")
             from src.rl_tuner import tune_correction
-            correction_params = tune_correction(dataset, num_iterations=args.rl_iterations)
+            correction_params = tune_correction(
+                dataset,
+                num_iterations=args.rl_iterations,
+                checkpoint_dir=args.checkpoint,
+            )
             print(f"  Tuned params: {correction_params}")
 
     report = run_verification(args.input, correction_params=correction_params)

@@ -1,110 +1,27 @@
 """
 Phase 3: RL tuner for self-improvement.
-- Gym-like env: state = graph + verification features; action = correction threshold.
-- PPO (RLlib): train briefly to optimize when to intervene; reward = truth-seeking vs over-correction.
-- tune_correction() → optimized params (intervention_threshold, causal_bias, causal_truth).
+- Uses minimal custom RL env from src/rl_env.py (re_env / VerifierTunerEnv).
+- PPO (RLlib): small policy, 1–2 workers, 5–10 iterations; outputs best_threshold, best_bias_adjust.
+- Saves checkpoint for reuse.
 """
-import copy
-from typing import Any
+from pathlib import Path
 
-import gymnasium as gym
-import numpy as np
+from src.rl_env import VerifierTunerEnv, THRESHOLDS, BIAS_ADJUSTS, re_env
 
-from src.agents.corrector import correct_results
-
-# Discrete thresholds the agent can choose
-THRESHOLDS = [0.4, 0.5, 0.55, 0.6, 0.7]
-INTERVENTION_PENALTY = 0.05  # penalize unnecessary interventions (efficiency bonus when low)
-
-
-def _mean_conf(results: list[dict]) -> float:
-    if not results:
-        return 0.0
-    return sum(r["confidence"] for r in results) / len(results)
-
-
-def _count_interventions(results: list[dict]) -> int:
-    return sum(1 for r in results if r.get("correction_applied"))
-
-
-class VerifierTunerEnv(gym.Env):
-    """
-    RLlib-compatible env: tune correction threshold to match ground-truth confidence
-    while penalizing over-correction (hallucinations / false positives).
-    """
-
-    metadata = {"render_modes": []}
-
-    def __init__(self, dataset: list[tuple], seed=None):
-        """
-        dataset: list of (verification_results, graph, ground_truth).
-        Each ground_truth: {"is_fake": bool, "expected_conf": float}.
-        """
-        super().__init__()
-        self.dataset = dataset
-        self._current = None
-        self._rng = np.random.default_rng(seed)
-
-        # State: [mean_verification_conf, n_edges_norm, n_claims_norm] in [0,1]
-        self.observation_space = gym.spaces.Box(
-            low=0.0, high=1.0, shape=(3,), dtype=np.float32
-        )
-        # Action: which threshold index (0..4)
-        self.action_space = gym.spaces.Discrete(len(THRESHOLDS))
-
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
-        if seed is not None:
-            self._rng = np.random.default_rng(seed)
-        if not self.dataset:
-            raise ValueError("Empty dataset")
-        idx = self._rng.integers(0, len(self.dataset))
-        self._current = self.dataset[idx]
-        v_res, graph, gt = self._current
-        obs = self._obs(v_res, graph)
-        return obs, {}
-
-    def step(self, action: int):
-        v_res, graph, gt = self._current
-        threshold = THRESHOLDS[int(action)]
-        params = {"intervention_threshold": threshold}
-        corrected, _ = correct_results(copy.deepcopy(v_res), graph, params)
-        mean_final = _mean_conf(corrected)
-        n_interventions = _count_interventions(corrected)
-        n_claims = max(1, len(v_res))
-
-        expected = gt.get("expected_conf", 0.5)
-        # Reward: match ground truth (truth-seeking), penalize over-intervention
-        reward = -abs(mean_final - expected) - INTERVENTION_PENALTY * (
-            n_interventions / n_claims
-        )
-
-        obs = self._obs(v_res, graph)
-        return obs, float(reward), True, False, {}
-
-    def _obs(self, v_res: list[dict], graph: Any) -> np.ndarray:
-        mean_conf = _mean_conf(v_res)
-        n_edges = graph.number_of_edges() if graph else 0
-        n_claims = max(1, len(v_res))
-        return np.array(
-            [
-                mean_conf,
-                min(1.0, n_edges / 20.0),
-                min(1.0, n_claims / 5.0),
-            ],
-            dtype=np.float32,
-        )
+__all__ = ["re_env", "tune_correction"]
 
 
 def tune_correction(
     dataset: list[tuple],
     num_iterations: int = 5,
     seed: int | None = None,
+    checkpoint_dir: str | Path | None = None,
+    use_bias_actions: bool = False,
 ) -> dict:
     """
-    Run a short PPO training loop on the tuner env; return optimized params.
+    Run PPO on the custom env (rl_env); return learned params and save checkpoint.
     dataset: list of (verification_results, graph, ground_truth).
-    Returns dict with intervention_threshold (and optionally causal_bias, causal_truth).
+    Returns dict with best_threshold, best_bias_adjust, intervention_threshold, causal_bias, causal_truth.
     """
     try:
         import ray
@@ -121,6 +38,8 @@ def tune_correction(
         print("  RL tuner requires PyTorch. Install with: pip install torch")
         print("  Returning default params.")
         return {
+            "best_threshold": 0.55,
+            "best_bias_adjust": 0.0,
             "intervention_threshold": 0.55,
             "causal_bias": 0.4,
             "causal_truth": 0.85,
@@ -135,31 +54,38 @@ def tune_correction(
         return VerifierTunerEnv(
             dataset=env_config.get("dataset", []),
             seed=env_config.get("seed"),
+            use_bias_actions=env_config.get("use_bias_actions", False),
         )
 
     register_env("verifier_tuner", env_creator)
 
     config = (
         PPOConfig()
-        .environment("verifier_tuner", env_config={"dataset": dataset, "seed": seed})
+        .environment(
+            "verifier_tuner",
+            env_config={"dataset": dataset, "seed": seed, "use_bias_actions": use_bias_actions},
+        )
         .training(
             lr=1e-4,
-            train_batch_size=64,
-            minibatch_size=16,
+            train_batch_size=128,
+            minibatch_size=32,
             num_epochs=2,
         )
         .resources(num_gpus=0)
-        .env_runners(num_env_runners=1, num_envs_per_env_runner=1)
+        .env_runners(num_env_runners=2, num_envs_per_env_runner=1)
     )
 
     if not dataset:
         return {
+            "best_threshold": 0.55,
+            "best_bias_adjust": 0.0,
             "intervention_threshold": 0.55,
             "causal_bias": 0.4,
             "causal_truth": 0.85,
         }
 
     algo = config.build_algo()
+
     for i in range(num_iterations):
         result = algo.train()
         rew = (result.get("sampler_results") or {}).get("episode_reward_mean")
@@ -168,24 +94,53 @@ def tune_correction(
         if (i + 1) % max(1, num_iterations // 2) == 0 and rew is not None:
             print(f"  RL iter {i+1}/{num_iterations}  mean_reward={rew:.3f}")
 
-    # Infer best threshold: run policy on states and take mode
-    env = VerifierTunerEnv(dataset=dataset, seed=seed)
-    actions = []
-    for _ in range(min(20, len(dataset) * 2)):
+    # Save checkpoint for reuse
+    if checkpoint_dir is not None:
+        ckpt = Path(checkpoint_dir)
+        ckpt.mkdir(parents=True, exist_ok=True)
+        try:
+            algo.save(str(ckpt))
+            print(f"  Checkpoint saved to: {ckpt}")
+        except Exception as e:
+            print(f"  Checkpoint save skipped: {e}")
+
+    # Infer best_threshold and best_bias_adjust: run policy over full episode(s), take mode
+    env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
+    threshold_actions = []
+    bias_actions = []
+    for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
         obs, _ = env.reset(seed=seed)
-        action = algo.compute_single_action(obs, explore=False)
-        actions.append(int(action))
+        done = False
+        while not done:
+            action = algo.compute_single_action(obs, explore=False)
+            action = int(action)
+            if use_bias_actions:
+                threshold_actions.append(action // len(BIAS_ADJUSTS))
+                bias_actions.append(action % len(BIAS_ADJUSTS))
+            else:
+                threshold_actions.append(action)
+            obs, _, done, _, _ = env.step(action)
+
     try:
         algo.stop()
     except Exception:
         pass
 
     from collections import Counter
-    best_action = Counter(actions).most_common(1)[0][0]
-    best_threshold = THRESHOLDS[best_action]
+    best_ti = Counter(threshold_actions).most_common(1)[0][0]
+    best_threshold = THRESHOLDS[best_ti]
+    if use_bias_actions and bias_actions:
+        best_bi = Counter(bias_actions).most_common(1)[0][0]
+        best_bias_adjust = BIAS_ADJUSTS[best_bi]
+        causal_bias = max(0.0, 0.4 - best_bias_adjust)
+    else:
+        best_bias_adjust = 0.0
+        causal_bias = 0.4
 
     return {
+        "best_threshold": best_threshold,
+        "best_bias_adjust": best_bias_adjust,
         "intervention_threshold": best_threshold,
-        "causal_bias": 0.4,
+        "causal_bias": causal_bias,
         "causal_truth": 0.85,
     }

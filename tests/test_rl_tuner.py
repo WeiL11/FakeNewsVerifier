@@ -7,7 +7,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def test_tuner_env_reset_step() -> None:
-    from src.rl_tuner import VerifierTunerEnv, THRESHOLDS
+    from src.rl_env import re_env, THRESHOLDS
 
     # One sample: fake verification_results + graph + ground_truth
     v_res = [{"claim": "test", "confidence": 0.4, "status": "Low"}]
@@ -19,13 +19,14 @@ def test_tuner_env_reset_step() -> None:
     gt = {"is_fake": True, "expected_conf": 0.2}
     dataset = [(v_res, G, gt)]
 
-    env = VerifierTunerEnv(dataset=dataset, seed=42)
+    env = re_env(dataset=dataset, seed=42)
     obs, info = env.reset(seed=42)
-    assert obs.shape == (3,)
+    # State: [conf1..conf10, num_edges_norm, num_sources_norm] = 12
+    assert obs.shape == (12,)
     assert obs.dtype.kind == "f"
 
     obs2, reward, terminated, truncated, info = env.step(0)  # threshold 0.4
-    assert obs2.shape == (3,)
+    assert obs2.shape == (12,)
     assert isinstance(reward, float)
-    assert terminated is True
+    assert terminated is True  # one sample -> done after one step
     assert 0 <= env.action_space.n == len(THRESHOLDS)
