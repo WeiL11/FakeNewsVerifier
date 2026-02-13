@@ -2,7 +2,7 @@
 
 A system for extracting, verifying, and correcting claims from news using a claim–source graph, causal checks, and optional RL tuning.
 
-*Ongoing: RL is not yet reliably "learning" (accuracy/reward gains vary); we are iterating on env design and inference to improve consistency.*
+*Ongoing: RL is not yet reliably "learning" (accuracy/reward gains vary); we are iterating on "a good reward" to improve consistency.*
 
 ---
 
