@@ -17,7 +17,8 @@ if str(_RL_ROOT) not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
 from src.agents.corrector import correct_results
 from src.rl_env import VerifierTunerEnv, THRESHOLDS, BIAS_ADJUSTS, re_env
 
-__all__ = ["re_env", "tune_correction", "evaluate_metrics"]
+__all__ = ["re_env", "tune_correction", "evaluate_metrics", "load_tuned_params_from_checkpoint"]
+
 
 # Default conf threshold for fake/real classification (conf < this => predicted fake)
 DEFAULT_CONF_THRESHOLD = 0.5
@@ -209,7 +210,7 @@ def tune_correction(
             num_epochs=2,
         )
         .resources(num_gpus=0)
-        .env_runners(num_env_runners=2, num_envs_per_env_runner=1)
+        .env_runners(num_env_runners=1, num_envs_per_env_runner=1)  # 1 runner so get_module() works for inference
     )
 
     if not dataset:
@@ -330,3 +331,68 @@ def tune_correction(
 
     best_params["reward_history"] = reward_history
     return best_params
+
+
+def load_tuned_params_from_checkpoint(
+    checkpoint_path: str | Path,
+    dataset: list[tuple],
+    seed: int | None = None,
+    use_bias_actions: bool = False,
+) -> dict:
+    """
+    Load algorithm from checkpoint and extract tuned params via inference.
+    Use when you saved a checkpoint and want to apply learned params without retraining.
+    """
+    try:
+        import ray
+        from ray.rllib.algorithms.algorithm import Algorithm
+        import numpy as np
+        import torch
+    except ImportError as e:
+        raise ImportError("Requires ray[rllib], torch") from e
+
+    try:
+        ray.init(ignore_reinit_error=True)
+    except Exception:
+        pass
+
+    algo = Algorithm.from_checkpoint(str(checkpoint_path))
+    module = algo.get_module()
+    if module is None:
+        algo.stop()
+        raise RuntimeError("Checkpoint has no local module (distributed); use num_env_runners=1 when training")
+
+    threshold_actions = []
+    bias_actions = []
+    env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
+    for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
+        obs, _ = env.reset(seed=seed)
+        done = False
+        while not done:
+            obs_batch = torch.from_numpy(np.array([obs], dtype=np.float32))
+            fwd = module.forward_inference({"obs": obs_batch})
+            logits = fwd.get("action_dist_inputs")
+            action = int(torch.argmax(logits, dim=-1)[0].item()) if logits is not None else 2
+            if use_bias_actions:
+                threshold_actions.append(action // len(BIAS_ADJUSTS))
+                bias_actions.append(action % len(BIAS_ADJUSTS))
+            else:
+                threshold_actions.append(action)
+            obs, _, done, _, _ = env.step(action)
+
+    from collections import Counter
+    best_ti = Counter(threshold_actions).most_common(1)[0][0]
+    best_threshold = THRESHOLDS[best_ti]
+    if use_bias_actions and bias_actions:
+        best_bi = Counter(bias_actions).most_common(1)[0][0]
+        causal_bias = max(0.0, 0.4 - BIAS_ADJUSTS[best_bi])
+    else:
+        causal_bias = 0.4
+
+    algo.stop()
+    return {
+        "best_threshold": best_threshold,
+        "intervention_threshold": best_threshold,
+        "causal_bias": causal_bias,
+        "causal_truth": 0.85,
+    }
