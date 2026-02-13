@@ -1,0 +1,12 @@
+[
+  {"claim": "Mount Everest is the tallest mountain.", "ground_truth": {"is_fake": false, "expected_conf": 0.95}},
+  {"claim": "The Amazon River is the longest river.", "ground_truth": {"is_fake": false, "expected_conf": 0.9}},
+  {"claim": "Napoleon was short.", "ground_truth": {"is_fake": true, "expected_conf": 0.2}},
+  {"claim": "Vikings wore horned helmets.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Lightning never strikes the same place twice.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Goldfish have a 3-second memory.", "ground_truth": {"is_fake": true, "expected_conf": 0.05}},
+  {"claim": "Shaving makes hair grow back thicker.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Carrots improve your eyesight.", "ground_truth": {"is_fake": true, "expected_conf": 0.2}},
+  {"claim": "The Bermuda Triangle is a supernatural danger zone.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Walt Disney is cryogenically frozen.", "ground_truth": {"is_fake": true, "expected_conf": 0.05}}
+]
