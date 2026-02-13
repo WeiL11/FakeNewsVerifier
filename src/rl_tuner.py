@@ -262,17 +262,29 @@ def tune_correction(
         except Exception as e:
             print(f"  Checkpoint save skipped: {e}")
 
-    # Infer best_threshold and best_bias_adjust: run policy over full episode(s), take mode
+    # Infer best_threshold and best_bias_adjust: use modern RLlib API (get_module + forward_inference)
     threshold_actions = []
     bias_actions = []
     try:
+        import numpy as np
+        import torch
+        module = algo.get_module()
+        if module is None:
+            raise RuntimeError("Algorithm has no local module (distributed mode)")
         env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
-        for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
+        n_episodes = min(3, max(1, 20 // max(1, len(dataset))))
+        for _ in range(n_episodes):
             obs, _ = env.reset(seed=seed)
             done = False
             while not done:
-                action = algo.compute_single_action(obs, explore=False)
-                action = int(action)
+                obs_batch = torch.from_numpy(np.array([obs], dtype=np.float32))
+                fwd = module.forward_inference({"obs": obs_batch})
+                logits = fwd.get("action_dist_inputs")
+                if logits is not None:
+                    action = int(torch.argmax(logits, dim=-1)[0].item())
+                else:
+                    act = fwd.get("action") or fwd.get("actions")
+                    action = int(act[0].item() if hasattr(act, "__getitem__") else 2)
                 if use_bias_actions:
                     threshold_actions.append(action // len(BIAS_ADJUSTS))
                     bias_actions.append(action % len(BIAS_ADJUSTS))
