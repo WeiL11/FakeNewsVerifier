@@ -1,6 +1,6 @@
 """
-Corrector agent — self-correction for low-confidence claims via causal intervention.
-Threshold and causal params are tunable (e.g. by RL).
+Corrector: applies causal intervention to low-confidence claims.
+Params (intervention_threshold, causal_bias, causal_truth) are tunable via RL.
 """
 import copy
 
@@ -14,14 +14,9 @@ DEFAULT_PARAMS = {
 
 
 def correct_results(verification_results, graph, params=None):
-    """
-    Self-correction loop: for low-confidence claims, apply causal intervention.
-    If conf < intervention_threshold → intervene once.
-    params: optional dict from RL tuner (intervention_threshold, causal_bias, causal_truth).
-    Fallback: if params is None, use DEFAULT_PARAMS (hardcoded).
-    """
+    """For claims with confidence < threshold, apply causal intervention once. params overrides DEFAULT_PARAMS."""
     params = {**DEFAULT_PARAMS, **(params or {})}
-    threshold = params["intervention_threshold"]  # learned_value when from tuner
+    threshold = params["intervention_threshold"]
     bias = params["causal_bias"]
     truth = params["causal_truth"]
 

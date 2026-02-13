@@ -1,12 +1,11 @@
 """
-FakeNewsVerifier — Entry point: text → extract → verify → correct → report.
+FakeNewsVerifier: text → extract claims → verify → correct → report.
 """
 import argparse
 import json
 import sys
 from pathlib import Path
 
-# Ensure project root on path when run as script
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -18,11 +17,7 @@ from src.graph import graph_summary
 
 
 def run_verification(input_text, correction_params=None, verbose=True):
-    """
-    Run extract → verify → correct → report.
-    correction_params: optional dict (intervention_threshold, causal_bias, causal_truth) from RL tuner.
-    verbose: if False, no console output (for before/after comparison).
-    """
+    """Run extract → verify → correct → report. correction_params from RL tuner; verbose=False suppresses output."""
     if verbose:
         print("\n" + "=" * 60)
         print("FAKE NEWS VERIFIER - Phase 1 Demo")
@@ -68,7 +63,7 @@ def run_verification(input_text, correction_params=None, verbose=True):
 
 
 def _build_rl_dataset(train_path):
-    """Load train_claims.json and run extract+verify for each; return list of (v_res, graph, gt)."""
+    """Load train_claims.json, run extract+verify per item; return [(v_res, graph, gt), ...]."""
     from src.agents.claim_extractor import extract_claims
     from src.agents.verifier import verify_claims
 
@@ -127,10 +122,7 @@ if __name__ == "__main__":
         help="Run complex multi-agent pipeline (Understand → Judge → Search Decider → Comparator → Reporter)",
     )
 
-    args, unknown = parser.parse_known_args()
-    if unknown:
-        pass
-
+    args = parser.parse_args()
     correction_params = None
     if args.rl_tune and not args.complex_mode:
         train_path = args.train_data or str(ROOT / "data" / "train_claims.json")
@@ -139,7 +131,6 @@ if __name__ == "__main__":
         else:
             print("Phase 3: RL tuner — building dataset and training...")
             full_dataset = _build_rl_dataset(train_path)
-            # 80/20 train/test split for evaluation (RL getting better metrics)
             split = max(1, int(len(full_dataset) * 0.8))
             train_dataset = full_dataset[:split]
             test_dataset = full_dataset[split:]
@@ -154,7 +145,6 @@ if __name__ == "__main__":
                 test_dataset=test_dataset if test_dataset else None,
             )
             print(f"  Tuned params: {correction_params}")
-            # Before/after report for test claim (e.g. initial conf 0.6 → tuned 0.2 for fake claim)
             before_report = run_verification(args.input, correction_params=None, verbose=False)
             after_report = run_verification(args.input, correction_params=correction_params, verbose=False)
             before_confs = [r["confidence"] for r in before_report["final_verification"]]

@@ -1,6 +1,6 @@
 """
-Search Decider Model — Outputs search_need (0-1).
-Mock: If fake_conf > 0.5 or conflict > 0.5 → high need. Later tunable via RL.
+Search Decider: outputs search_need (0–1).
+High need when fake_conf or conflict exceeds thresholds.
 """
 from typing import Any
 
@@ -10,10 +10,7 @@ def search_decide(
     common_sense_conflict: float,
     params: dict[str, Any] | None = None,
 ) -> dict:
-    """
-    Decide whether to trigger search. Returns search_need (0-1).
-    Mock: high need when fake_conf or conflict exceeds thresholds.
-    """
+    """Return search_need based on fake_conf and conflict thresholds."""
     params = params or {}
     fake_thresh = params.get("fake_threshold", 0.5)
     conflict_thresh = params.get("conflict_threshold", 0.5)
@@ -24,7 +21,6 @@ def search_decide(
     if common_sense_conflict >= conflict_thresh:
         need = max(need, min(1.0, 0.5 + common_sense_conflict))
 
-    # If both high, boost need
     if fake_conf >= 0.6 and common_sense_conflict >= 0.6:
         need = min(1.0, need + 0.2)
 

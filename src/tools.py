@@ -1,10 +1,9 @@
 """
-Search tools — web_search (general), x_keyword_search (X-specific).
-Mock: return synthetic similar reports. Replace with real APIs later.
+Search tools: web_search and x_keyword_search.
+Mock implementations return synthetic reports. Replace with real APIs (Serper, Tavily, X API) for production.
 """
-from typing import Callable
 
-# Mock responses for common claim types (for demo without real API)
+# Mock responses by claim type (demo only)
 MOCK_REPORTS = {
     "conspiracy": [
         "Fact-check: No evidence vaccines contain microchips. FDA and CDC deny.",
@@ -25,7 +24,7 @@ MOCK_REPORTS = {
 
 
 def _classify_query(statement: str) -> str:
-    """Simple mock: classify query type for mock responses."""
+    """Classify query type to select mock response bucket."""
     s = statement.lower()
     if any(w in s for w in ["conspiracy", "vaccine", "5g", "moon", "alien", "flat"]):
         return "conspiracy"
@@ -35,33 +34,12 @@ def _classify_query(statement: str) -> str:
 
 
 def web_search(query: str, max_results: int = 3) -> list[str]:
-    """
-    General web search. Mock: returns synthetic similar reports.
-    Replace with real API (e.g. Serper, Tavily) later.
-    """
+    """General web search. Returns synthetic reports for demo; replace with real API for production."""
     bucket = _classify_query(query)
     reports = MOCK_REPORTS.get(bucket, MOCK_REPORTS["default"])
     return reports[:max_results]
 
 
 def x_keyword_search(query: str, max_results: int = 3) -> list[str]:
-    """
-    X (Twitter) keyword search for similar posts. Mock: same as web_search.
-    Replace with X API later.
-    """
+    """X (Twitter) keyword search. Mock: delegates to web_search; replace with X API for production."""
     return web_search(query, max_results)
-
-
-# Optional: pluggable real implementations
-_web_search_impl: Callable[[str, int], list[str]] = web_search
-_x_search_impl: Callable[[str, int], list[str]] = x_keyword_search
-
-
-def set_web_search(fn: Callable[[str, int], list[str]]) -> None:
-    global _web_search_impl
-    _web_search_impl = fn
-
-
-def set_x_search(fn: Callable[[str, int], list[str]]) -> None:
-    global _x_search_impl
-    _x_search_impl = fn

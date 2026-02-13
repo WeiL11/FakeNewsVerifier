@@ -1,5 +1,5 @@
 """
-Reporter — Outputs final score + matrix for before/after observation.
+Reporter: builds final report with score matrix.
 """
 from typing import Any
 
@@ -14,9 +14,7 @@ def report(
     searched_scores: list[dict],
     comparator_result: dict,
 ) -> dict:
-    """
-    Build final report with score matrix for before/after observation.
-    """
+    """Build final report with score matrix."""
     final_is_fake = comparator_result.get("final_is_fake", judge_result.get("fake_conf", 0.5))
 
     matrix = {

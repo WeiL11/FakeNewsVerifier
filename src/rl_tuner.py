@@ -1,15 +1,11 @@
 """
-Phase 3: RL tuner for self-improvement.
-- Uses minimal custom RL env from src/rl_env.py (re_env / VerifierTunerEnv).
-- PPO (RLlib): small policy, 1–2 workers, 5–10 iterations; outputs best_threshold, best_bias_adjust.
-- Saves checkpoint for reuse.
-- Evaluates RL improvement: accuracy, Brier/ECE, intervention efficiency, reward trend.
+RL tuner: PPO (RLlib) optimizes correction threshold and causal params on labeled data.
+Outputs best_threshold, causal_bias; evaluates accuracy, Brier, ECE, intervention efficiency.
 """
 import copy
 import os
 from pathlib import Path
 
-# Ensure Ray workers can import src (notebook/K8s may run from different cwd)
 _RL_ROOT = Path(__file__).resolve().parent.parent
 if str(_RL_ROOT) not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
     os.environ["PYTHONPATH"] = str(_RL_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")
@@ -17,18 +13,14 @@ if str(_RL_ROOT) not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
 from src.agents.corrector import correct_results
 from src.rl_env import VerifierTunerEnv, THRESHOLDS, BIAS_ADJUSTS, re_env
 
-__all__ = ["re_env", "tune_correction", "evaluate_metrics", "load_tuned_params_from_checkpoint"]
+__all__ = ["re_env", "tune_correction", "evaluate_metrics"]
 
 
-# Default conf threshold for fake/real classification (conf < this => predicted fake)
 DEFAULT_CONF_THRESHOLD = 0.5
 
 
 def evaluate_metrics(dataset: list, params: dict | None, conf_threshold: float = DEFAULT_CONF_THRESHOLD) -> dict:
-    """
-    Compute metrics for a corrector with given params on dataset (list of (v_res, graph, gt)).
-    Returns: accuracy, brier_score, ece, avg_interventions, avg_interventions_real, avg_interventions_fake.
-    """
+    """Compute accuracy, Brier, ECE, intervention stats for corrector with given params on dataset."""
     if not dataset:
         return {
             "accuracy": 0.0,
@@ -44,7 +36,7 @@ def evaluate_metrics(dataset: list, params: dict | None, conf_threshold: float =
     interventions_real = []
     interventions_fake = []
     confs_list = []
-    labels_list = []  # is_fake as 0/1 for ECE
+    labels_list = []
 
     for v_res, graph, gt in dataset:
         corrected, _ = correct_results(copy.deepcopy(v_res), graph, params=params)
@@ -69,7 +61,6 @@ def evaluate_metrics(dataset: list, params: dict | None, conf_threshold: float =
     accuracy = correct_preds / n
     brier_score = brier_sum / n
 
-    # ECE: 10 bins by predicted confidence; per bin: |acc_bin - mean_conf_bin|
     num_bins = min(10, max(1, n // 5))
     bin_edges = [i / num_bins for i in range(num_bins + 1)]
     ece_sum = 0.0
@@ -96,37 +87,32 @@ def evaluate_metrics(dataset: list, params: dict | None, conf_threshold: float =
 
 
 def _print_rl_getting_better(reward_history: list, metrics_pre: dict, metrics_post: dict, best_params: dict) -> None:
-    """Print a summary showing RL is getting better at fake news detection (quantitative + success threshold)."""
+    """Print RL improvement summary: reward, accuracy, Brier, ECE, interventions."""
     print("\n" + "=" * 60)
     print("  RL is Getting Better at Fake News Detection!")
     print("=" * 60)
 
-    # Mean reward over iterations (upward trend)
     if reward_history:
         start_r, end_r = reward_history[0], reward_history[-1]
         trend = "↑ upward" if end_r >= start_r else "↓ downward"
         print(f"\n  Mean reward over iterations:  {start_r:.3f} → {end_r:.3f}  ({trend})")
 
-    # Accuracy improvement (pre vs post on holdout)
     acc_pre = metrics_pre.get("accuracy", 0)
     acc_post = metrics_post.get("accuracy", 0)
     acc_delta = (acc_post - acc_pre) * 100
     print(f"\n  Accuracy (holdout):  Pre-tune {acc_pre*100:.1f}%  →  Post-tune {acc_post*100:.1f}%  (Δ {acc_delta:+.1f}%)")
 
-    # Confidence calibration (Brier, ECE — lower is better)
     brier_pre, brier_post = metrics_pre.get("brier_score", 0), metrics_post.get("brier_score", 0)
     ece_pre, ece_post = metrics_pre.get("ece", 0), metrics_post.get("ece", 0)
     print(f"  Brier score (lower better):  Pre {brier_pre:.3f}  →  Post {brier_post:.3f}")
     print(f"  ECE (lower better):          Pre {ece_pre:.3f}  →  Post {ece_post:.3f}")
 
-    # Intervention efficiency (fewer on real, more targeted on fakes)
     int_pre, int_post = metrics_pre.get("avg_interventions_per_episode", 0), metrics_post.get("avg_interventions_per_episode", 0)
     int_real_post = metrics_post.get("avg_interventions_real", 0)
     int_fake_post = metrics_post.get("avg_interventions_fake", 0)
     print(f"  Avg interventions/episode:   Pre {int_pre:.2f}  →  Post {int_post:.2f}")
     print(f"  Post-tune: interventions on real claims {int_real_post:.2f}, on fake claims {int_fake_post:.2f}")
 
-    # Success threshold: mean reward > 0.7 and test accuracy +15% vs baseline
     mean_reward = sum(reward_history) / len(reward_history) if reward_history else 0
     success_reward = mean_reward > 0.7
     success_accuracy = acc_delta >= 15.0
@@ -150,13 +136,7 @@ def tune_correction(
     use_bias_actions: bool = False,
     test_dataset: list[tuple] | None = None,
 ) -> dict:
-    """
-    Run PPO on the custom env (rl_env); return learned params and save checkpoint.
-    dataset: list of (verification_results, graph, ground_truth) for training.
-    test_dataset: optional holdout for evaluation (80/20 split); if provided, pre/post metrics are computed and printed.
-    Returns dict with best_threshold, best_bias_adjust, intervention_threshold, causal_bias, causal_truth,
-    reward_history, metrics_pre, metrics_post (when test_dataset given).
-    """
+    """Run PPO on VerifierTunerEnv; return learned params. test_dataset triggers pre/post metrics."""
     try:
         import ray
         from ray.rllib.algorithms.ppo import PPOConfig
@@ -232,7 +212,6 @@ def tune_correction(
 
     for i in range(num_iterations):
         result = algo.train()
-        # Mean reward (RLlib API varies: sampler_results, env_runners/episode_return_mean)
         rew = (result.get("sampler_results") or {}).get("episode_reward_mean")
         if rew is None:
             rew = result.get("episode_reward_mean")
@@ -241,19 +220,16 @@ def tune_correction(
             rew = env_runners.get("episode_return_mean") or env_runners.get("episode_reward_mean")
         if rew is not None:
             reward_history.append(float(rew))
-        # Policy loss if available (RLlib PPO stores in learner_stats)
         learner = (result.get("learner_stats") or result.get("info", {}).get("learner", {}))
         if isinstance(learner, dict):
             policy_loss = learner.get("policy_loss") or learner.get("total_loss")
         else:
             policy_loss = None
-        # Console log per iteration
         msg = f"  Iteration {i+1}/{num_iterations}: Mean reward = {rew:.3f}" if rew is not None else f"  Iteration {i+1}/{num_iterations}: (no reward)"
         if policy_loss is not None:
             msg += f" | Policy loss = {float(policy_loss):.4f}"
         print(msg)
 
-    # Save checkpoint for reuse
     if checkpoint_dir is not None:
         ckpt = Path(checkpoint_dir)
         ckpt.mkdir(parents=True, exist_ok=True)
@@ -263,7 +239,6 @@ def tune_correction(
         except Exception as e:
             print(f"  Checkpoint save skipped: {e}")
 
-    # Infer best_threshold and best_bias_adjust: use modern RLlib API (get_module + forward_inference)
     threshold_actions = []
     bias_actions = []
     try:
@@ -331,68 +306,3 @@ def tune_correction(
 
     best_params["reward_history"] = reward_history
     return best_params
-
-
-def load_tuned_params_from_checkpoint(
-    checkpoint_path: str | Path,
-    dataset: list[tuple],
-    seed: int | None = None,
-    use_bias_actions: bool = False,
-) -> dict:
-    """
-    Load algorithm from checkpoint and extract tuned params via inference.
-    Use when you saved a checkpoint and want to apply learned params without retraining.
-    """
-    try:
-        import ray
-        from ray.rllib.algorithms.algorithm import Algorithm
-        import numpy as np
-        import torch
-    except ImportError as e:
-        raise ImportError("Requires ray[rllib], torch") from e
-
-    try:
-        ray.init(ignore_reinit_error=True)
-    except Exception:
-        pass
-
-    algo = Algorithm.from_checkpoint(str(checkpoint_path))
-    module = algo.get_module()
-    if module is None:
-        algo.stop()
-        raise RuntimeError("Checkpoint has no local module (distributed); use num_env_runners=1 when training")
-
-    threshold_actions = []
-    bias_actions = []
-    env = VerifierTunerEnv(dataset=dataset, seed=seed, use_bias_actions=use_bias_actions)
-    for _ in range(min(3, max(1, 20 // max(1, len(dataset))))):
-        obs, _ = env.reset(seed=seed)
-        done = False
-        while not done:
-            obs_batch = torch.from_numpy(np.array([obs], dtype=np.float32))
-            fwd = module.forward_inference({"obs": obs_batch})
-            logits = fwd.get("action_dist_inputs")
-            action = int(torch.argmax(logits, dim=-1)[0].item()) if logits is not None else 2
-            if use_bias_actions:
-                threshold_actions.append(action // len(BIAS_ADJUSTS))
-                bias_actions.append(action % len(BIAS_ADJUSTS))
-            else:
-                threshold_actions.append(action)
-            obs, _, done, _, _ = env.step(action)
-
-    from collections import Counter
-    best_ti = Counter(threshold_actions).most_common(1)[0][0]
-    best_threshold = THRESHOLDS[best_ti]
-    if use_bias_actions and bias_actions:
-        best_bi = Counter(bias_actions).most_common(1)[0][0]
-        causal_bias = max(0.0, 0.4 - BIAS_ADJUSTS[best_bi])
-    else:
-        causal_bias = 0.4
-
-    algo.stop()
-    return {
-        "best_threshold": best_threshold,
-        "intervention_threshold": best_threshold,
-        "causal_bias": causal_bias,
-        "causal_truth": 0.85,
-    }

@@ -1,6 +1,6 @@
 """
-Complex multi-agent pipeline — sequential agent chain with decision gates.
-Flow: Understand → Judge → Search Decider → [Conditional Search & Recursion] → Comparator → Reporter.
+Complex pipeline: Understand → Judge → Search Decider → [conditional search] → Comparator → Reporter.
+Search triggers when fake_conf, conflict, and search_need exceed gate thresholds.
 """
 from src.agents.understand import understand
 from src.agents.judge import judge
@@ -10,7 +10,6 @@ from src.agents.reporter import report
 from src.tools import web_search
 
 
-# Decision gate thresholds (tunable via RL later)
 DEFAULT_GATE = {
     "fake_conf": 0.6,
     "common_sense_conflict": 0.6,
@@ -24,10 +23,7 @@ def run_complex_pipeline(
     max_search_reports: int = 3,
     verbose: bool = True,
 ) -> dict:
-    """
-    Run the full multi-agent chain with decision gates.
-    If (fake_conf > 0.6 AND conflict > 0.6 AND search_need > 0.7), trigger search.
-    """
+    """Run multi-agent chain. Search triggers when fake_conf, conflict, search_need exceed gate thresholds."""
     gate = {**DEFAULT_GATE, **(gate_params or {})}
     fc = gate["fake_conf"]
     cc = gate["common_sense_conflict"]

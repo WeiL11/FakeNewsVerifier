@@ -1,13 +1,11 @@
 """
-Claim extractor agent — splits input into 1–3 atomic claims (naive for Phase 1).
+Claim extractor: splits input text into atomic claims.
+Uses simple sentence splitting; replace with LLM/NLP for production.
 """
 
 
 def extract_claims(text):
-    """
-    Very naive splitter — in real version use LLM or better NLP.
-    For Phase 1: split on periods and look for assertion-like sentences.
-    """
+    """Split text into assertion-like sentences (length > 15, contains assertion keywords)."""
     sentences = [
         s.strip()
         for s in text.replace("!", ".").replace("?", ".").split(".")

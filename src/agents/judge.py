@@ -1,10 +1,10 @@
 """
-Judge Model — Outputs fake_conf (0-1) and common_sense_conflict (0-1).
-Mock: keyword patterns (e.g. conspiracy words → high fake/conflict). Later tunable via RL.
+Judge: outputs fake_conf and common_sense_conflict (0–1).
+Uses keyword heuristics; tunable via RL for production.
 """
 import re
 
-# Conspiracy / misinformation indicators
+# Conspiracy/misinformation indicators
 CONSPIRACY_WORDS = [
     "conspiracy", "hidden", "cover-up", "suppressed", "truth", "lying",
     "microchips", "5g", "vaccines", "aliens", "pyramids", "flat", "rigged",
@@ -12,7 +12,7 @@ CONSPIRACY_WORDS = [
     "they don't want you to know", "wake up", "sheep", "mainstream media",
 ]
 
-# Common-sense conflict indicators (contradicts widely known facts)
+# Common-sense conflict phrases
 CONFLICT_PHRASES = [
     "earth is flat", "moon landing.*faked", "sun revolves", "bleach cures",
     "microchip.*vaccine|vaccine.*microchip", "5g.*covid|covid.*5g", "aliens built",
@@ -27,10 +27,7 @@ CREDIBLE_SIGNALS = [
 
 
 def judge(statement: str, key_facts: list[str] | None = None) -> dict:
-    """
-    Output fake_conf (0-1) and common_sense_conflict (0-1).
-    Mock: heuristics based on keyword patterns.
-    """
+    """Return fake_conf and common_sense_conflict from keyword heuristics."""
     text = (statement or "").lower()
     facts_text = " ".join(key_facts or []).lower()
     combined = f"{text} {facts_text}"
@@ -38,25 +35,21 @@ def judge(statement: str, key_facts: list[str] | None = None) -> dict:
     fake_score = 0.0
     conflict_score = 0.0
 
-    # Conspiracy words → high fake
     for w in CONSPIRACY_WORDS:
         if w in combined:
             fake_score = min(1.0, fake_score + 0.15)
             conflict_score = min(1.0, conflict_score + 0.1)
 
-    # Conflict phrases → high conflict and fake
     for pat in CONFLICT_PHRASES:
         if re.search(pat, combined):
             conflict_score = min(1.0, conflict_score + 0.45)
             fake_score = min(1.0, fake_score + 0.4)
 
-    # Credible signals → lower fake
     for s in CREDIBLE_SIGNALS:
         if s in combined:
             fake_score = max(0.0, fake_score - 0.2)
             conflict_score = max(0.0, conflict_score - 0.1)
 
-    # Length / structure heuristics (very short sensational = suspicious)
     if len(statement) < 50 and ("!" in statement or "breaking" in statement.lower()):
         fake_score = min(1.0, fake_score + 0.1)
 

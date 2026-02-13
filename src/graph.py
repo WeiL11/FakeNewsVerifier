@@ -5,10 +5,7 @@ import networkx as nx
 
 
 def build_claim_graph(claims, sources=None):
-    """
-    Simple directed graph: claims point to sources/evidence.
-    Returns graph + basic stats.
-    """
+    """Build directed graph: claims → sources. Returns NetworkX DiGraph."""
     G = nx.DiGraph()
 
     if sources is None:
@@ -28,7 +25,7 @@ def build_claim_graph(claims, sources=None):
 
 
 def graph_summary(G):
-    """Simple text summary of the graph."""
+    """Return text summary: claim count, source count, edge count."""
     claims = [n for n, d in G.nodes(data=True) if d.get("type") == "claim"]
     sources = len([n for n, d in G.nodes(data=True) if d.get("type") == "source"])
     edges = G.number_of_edges()

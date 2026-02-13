@@ -1,14 +1,11 @@
 """
-Verifier agent — builds claim–source graph and assigns confidence.
+Verifier: builds claim–source graph and assigns confidence scores.
 """
 from src.graph import build_claim_graph, graph_summary
 
 
 def verify_claims(claims):
-    """
-    Mock verification: assign random-ish confidence + build graph.
-    In future: call search / knowledge base.
-    """
+    """Build graph and assign confidence per claim. Replace with real search/KB for production."""
     graph = build_claim_graph(claims)
 
     results = []

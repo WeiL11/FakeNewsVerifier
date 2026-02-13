@@ -1,9 +1,6 @@
 """
-Minimal custom RL environment (Gymnasium-style, RLlib compatible).
-- State: vector of current confidence scores + graph stats [conf1, ..., num_edges, num_sources].
-- Actions: discrete (e.g. set threshold 0.4/0.55/0.7, or bias removal 0.1/0.2/0.3).
-- Reward: (1 - |final_conf - expected_conf|) + efficiency bonus - over-correction penalty.
-- Episode: one full run over the batch of claims (10–20).
+RL environment (Gymnasium, RLlib): state = [confs, edges_norm, sources_norm];
+actions = discrete threshold/bias; reward = alignment with expected_conf + efficiency - over-correction.
 """
 import copy
 from typing import Any
@@ -32,29 +29,18 @@ def _count_interventions(results: list[dict]) -> int:
 
 
 class VerifierTunerEnv(gym.Env):
-    """
-    Gymnasium-style Env (RLlib compatible).
-    State: [conf1, conf2, ..., conf_MAX_CLAIMS, num_edges_norm, num_sources_norm].
-    Actions: Discrete(5) threshold or Discrete(15) threshold × bias_adjust (start simple: 5).
-    Reward: (1 - |final_conf - expected_conf|) + efficiency bonus - over-correction penalty.
-    Episode: one full run over the dataset (one step per claim, done when batch finished).
-    """
+    """State: padded confs + edges_norm + sources_norm. Actions: threshold (and optional bias)."""
 
     metadata = {"render_modes": []}
 
     def __init__(self, dataset: list[tuple], seed=None, use_bias_actions: bool = False):
-        """
-        dataset: list of (verification_results, graph, ground_truth).
-        ground_truth: {"is_fake": bool, "expected_conf": float}.
-        use_bias_actions: if True, actions are 15 (threshold × bias_adjust); else 5 (threshold only).
-        """
+        """dataset: [(v_res, graph, gt)]. gt: {is_fake, expected_conf}. use_bias_actions: 15 vs 5 actions."""
         super().__init__()
         self.dataset = list(dataset)
         self.use_bias_actions = use_bias_actions
         self._index = 0
         self._rng = np.random.default_rng(seed)
 
-        # State: confidence scores (padded) + num_edges_norm + num_sources_norm
         self.observation_space = gym.spaces.Box(
             low=0.0, high=1.0, shape=(MAX_CLAIMS + 2,), dtype=np.float32
         )
@@ -70,8 +56,6 @@ class VerifierTunerEnv(gym.Env):
         if not self.dataset:
             raise ValueError("Empty dataset")
         self._index = 0
-        # Optionally shuffle so episode order varies
-        # self._order = self._rng.permutation(len(self.dataset))
         v_res, graph, _ = self.dataset[self._index]
         obs = self._obs(v_res, graph)
         return obs, {}
@@ -99,13 +83,8 @@ class VerifierTunerEnv(gym.Env):
         expected = gt.get("expected_conf", 0.5)
         is_fake = gt.get("is_fake", True)
 
-        # Reward: (1 - |final_conf - expected_conf|) normalized
         term1 = 1.0 - min(1.0, abs(mean_final - expected))
-
-        # Bonus for few interventions (efficiency)
         efficiency_bonus = 0.1 * (1.0 - n_interventions / n_claims)
-
-        # Penalty for over-correction (making real claims low-conf)
         over_correction_penalty = 0.0
         if not is_fake and mean_final < 0.5:
             over_correction_penalty = 0.2
@@ -125,7 +104,6 @@ class VerifierTunerEnv(gym.Env):
         return next_obs, reward, done, truncated, {}
 
     def _obs(self, v_res: list[dict], graph: Any) -> np.ndarray:
-        # Current confidence scores (padded to MAX_CLAIMS)
         confs = [r["confidence"] for r in v_res]
         if len(confs) < MAX_CLAIMS:
             confs = confs + [0.0] * (MAX_CLAIMS - len(confs))
@@ -144,5 +122,4 @@ class VerifierTunerEnv(gym.Env):
         return np.array(confs + [edges_norm, sources_norm], dtype=np.float32)
 
 
-# Alias for the minimal custom RL environment
 re_env = VerifierTunerEnv
