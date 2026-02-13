@@ -1,0 +1,9 @@
+networkx>=3.0
+sympy>=1.12
+ray[rllib]>=2.9.0
+pyyaml>=6.0
+numpy>=1.26
+pandas>=2.2
+requests>=2.31
+pytest>=8.0
+python-dotenv>=1.0

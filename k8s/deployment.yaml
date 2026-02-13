@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fake-news-verifier
+  labels:
+    app: fake-news-verifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fake-news-verifier
+  template:
+    metadata:
+      labels:
+        app: fake-news-verifier
+    spec:
+      containers:
+        - name: fake-news-verifier
+          image: fake-news-verifier:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: fake-news-verifier-config

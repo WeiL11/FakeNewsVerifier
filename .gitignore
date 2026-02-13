@@ -1,0 +1,23 @@
+# Data: keep sample_claims.json, ignore large datasets
+data/*.csv
+data/*.parquet
+data/*.jsonl
+!data/sample_claims.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+venv/
+.venv/
+.env
+
+# Jupyter
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
