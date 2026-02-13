@@ -1,15 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: fake-news-verifier
+  name: verifier-service
   labels:
     app: fake-news-verifier
 spec:
-  type: ClusterIP
-  ports:
-    - port: 8080
-      targetPort: 8080
-      protocol: TCP
-      name: http
   selector:
     app: fake-news-verifier
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP

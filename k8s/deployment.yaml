@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: fake-news-verifier
+  name: verifier-deployment
   labels:
     app: fake-news-verifier
 spec:
@@ -15,9 +15,13 @@ spec:
         app: fake-news-verifier
     spec:
       containers:
-        - name: fake-news-verifier
-          image: fake-news-verifier:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - configMapRef:
-                name: fake-news-verifier-config
+        - name: verifier
+          image: fake-news-verifier:phase2
+          imagePullPolicy: Never
+          command: ["python", "src/main.py"]
+          args:
+            - "--input"
+            - "Breaking: 7.2 magnitude earthquake hits Nashville today!"
+          # env:
+          #   - name: SOME_VAR
+          #     value: "value"

@@ -1,0 +1,22 @@
+[
+  {"claim": "Breaking: 7.2 magnitude earthquake hits Nashville today!", "ground_truth": {"is_fake": false, "expected_conf": 0.75}},
+  {"claim": "The moon landing was faked in Nashville.", "ground_truth": {"is_fake": true, "expected_conf": 0.2}},
+  {"claim": "The mayor said the budget was approved. It has been reported that crime is down.", "ground_truth": {"is_fake": false, "expected_conf": 0.7}},
+  {"claim": "Vaccines contain microchips to track people.", "ground_truth": {"is_fake": true, "expected_conf": 0.15}},
+  {"claim": "The council is in session today. The vote was unanimous.", "ground_truth": {"is_fake": false, "expected_conf": 0.8}},
+  {"claim": "Aliens built the pyramids. NASA has hidden the truth.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Federal Reserve announced a rate cut. Markets rallied.", "ground_truth": {"is_fake": false, "expected_conf": 0.85}},
+  {"claim": "5G towers cause COVID-19. It has been reported worldwide.", "ground_truth": {"is_fake": true, "expected_conf": 0.1}},
+  {"claim": "Local school board said enrollment is up. The superintendent has confirmed.", "ground_truth": {"is_fake": false, "expected_conf": 0.75}},
+  {"claim": "Earth is flat. Scientists have been lying for centuries.", "ground_truth": {"is_fake": true, "expected_conf": 0.05}},
+  {"claim": "New highway opened last month. Traffic has improved.", "ground_truth": {"is_fake": false, "expected_conf": 0.7}},
+  {"claim": "Politifact rated this claim as false. The source was unreliable.", "ground_truth": {"is_fake": true, "expected_conf": 0.25}},
+  {"claim": "The company reported record profits. The CEO said growth will continue.", "ground_truth": {"is_fake": false, "expected_conf": 0.8}},
+  {"claim": "Elections were rigged. No evidence has been found but it is true.", "ground_truth": {"is_fake": true, "expected_conf": 0.2}},
+  {"claim": "Weather service said storms are likely tomorrow. Residents were advised to stay home.", "ground_truth": {"is_fake": false, "expected_conf": 0.85}},
+  {"claim": "Moon made of cheese. NASA has said so in secret reports.", "ground_truth": {"is_fake": true, "expected_conf": 0.05}},
+  {"claim": "Hospital announced new wing. Construction was completed on schedule.", "ground_truth": {"is_fake": false, "expected_conf": 0.75}},
+  {"claim": "Celebrity died in a hoax. The media has been fooled.", "ground_truth": {"is_fake": true, "expected_conf": 0.3}},
+  {"claim": "Library extended hours. The director said demand was high.", "ground_truth": {"is_fake": false, "expected_conf": 0.7}},
+  {"claim": "Government is hiding cure for cancer. Big Pharma has suppressed it.", "ground_truth": {"is_fake": true, "expected_conf": 0.15}}
+]

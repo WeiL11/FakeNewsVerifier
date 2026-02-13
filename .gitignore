@@ -1,3 +1,6 @@
+# Generated output
+report.json
+
 # Data: keep sample_claims.json, ignore large datasets
 data/*.csv
 data/*.parquet

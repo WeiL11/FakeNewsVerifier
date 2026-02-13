@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verifier-job-example
+spec:
+  template:
+    spec:
+      containers:
+        - name: verifier
+          image: fake-news-verifier:phase2
+          imagePullPolicy: Never
+          command: ["python", "src/main.py"]
+          args:
+            - "--input"
+            - "The moon landing was faked in Nashville."
+            - "--output"
+            - "/app/report.json"
+      restartPolicy: Never
+  backoffLimit: 2
